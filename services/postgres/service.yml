@@ -1,0 +1,26 @@
+name: postgres
+image: docker.io/library/postgres:16-alpine
+profiles:
+  - base
+  - service
+
+volumes:
+  - name: postgres-data
+    path: /var/lib/postgresql/data
+    pool: default
+    shifted: true
+
+limits:
+  limits.cpu: "2"
+  limits.memory: "2GB"
+
+env:
+  POSTGRES_USER: "app_user"
+  POSTGRES_DB: "app_db"
+  # In production, pass password via Git secrets / env
+  POSTGRES_PASSWORD: "change_this_password"
+
+healthcheck:
+  path: /
+  port: 5432
+  timeout: 30

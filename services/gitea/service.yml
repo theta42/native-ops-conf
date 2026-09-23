@@ -1,0 +1,24 @@
+name: gitea
+image: docker.io/gitea/gitea:latest-rootless
+profiles:
+  - base
+  - service
+
+volumes:
+  - name: gitea-data
+    path: /var/lib/gitea
+    pool: default
+    shifted: true
+
+limits:
+  limits.cpu: "2"
+  limits.memory: "2GB"
+
+healthcheck:
+  path: /
+  port: 3000
+  timeout: 30
+
+routing:
+  domain: git.example.com
+  upstream_port: 3000

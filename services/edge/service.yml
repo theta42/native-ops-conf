@@ -1,0 +1,14 @@
+name: edge
+image: caddy:2-alpine
+profiles:
+  - base
+  - edge
+
+limits:
+  limits.cpu: "1"
+  limits.memory: "512MB"
+
+healthcheck:
+  path: /
+  port: 80
+  timeout: 20

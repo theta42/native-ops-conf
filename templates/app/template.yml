@@ -1,0 +1,28 @@
+name: app
+image: node:22-alpine
+profiles:
+  - base
+  - service
+
+volumes:
+  - name: "{slug}-data"
+    path: /app/data
+    pool: default
+    shifted: true
+
+default_limits:
+  limits.cpu: "2"
+  limits.memory: "2GB"
+
+env_template:
+  PORT: "8080"
+  DATA_DIR: "/app/data"
+  TENANT_SLUG: "{slug}"
+
+healthcheck:
+  path: /health
+  port: 8080
+  timeout: 30
+  interval: 2
+
+routing_pattern: "{slug}.example.com"

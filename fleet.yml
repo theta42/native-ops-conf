@@ -1,0 +1,28 @@
+# Fleet Configuration for native-ops
+# Rename this cluster and set your base domain
+name: production-fleet
+domain: example.com
+dns_provider: digitalocean # "digitalocean", "proxmox", or custom plugin in providers/dns/
+
+network:
+  bridge_name: incusbr0
+  ipv4_cidr: 10.0.100.0/24
+
+providers:
+  digitalocean:
+    region: nyc1
+    default_size: s-4vcpu-8gb
+
+  proxmox:
+    endpoint: "https://pve.example.com:8006"
+    node: "pve-01"
+    default_pool: "local-zfs"
+
+# Host inventory. If a host is set to "auto" (or missing on the provider),
+# native-ops will automatically provision it with cloud-init on git push!
+hosts:
+  node-01:
+    provider: digitalocean
+    size: s-4vcpu-8gb
+    region: nyc1
+    address: "auto"
