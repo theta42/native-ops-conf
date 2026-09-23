@@ -111,15 +111,52 @@ routing:                          # Optional Caddy reverse proxy route
 
 ---
 
-## 🔄 Day-2 Operations
+## 🚢 Application CI/CD Deployments
 
-- **Add a new service**: Create `services/<name>/service.yml`, open PR, merge.
-- **Resize a service**: Edit `limits.cpu` or `limits.memory` in `service.yml`, open PR, merge.
-- **Update an image**: Change `image: <new-tag>` in `service.yml`, open PR, merge. (The engine safely snapshots storage volumes before replacing containers).
-- **Rotate hosts**: Add a new host in `fleet.yml`, merge, migrate volumes with `native-ops instance migrate`, destroy old host.
+Application repositories (like web apps, APIs, or internal tools) can deploy new versions to this fleet automatically when a git release tag is pushed.
+
+### Tag-Based Release Pattern in App Repositories
+
+In your application's repository (e.g. `my-app`), add `.github/workflows/release.yml`:
+
+```yaml
+name: Deploy Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native-ops
+        run: |
+          curl -fsSL https://github.com/theta42/native-ops/releases/download/v1.3.0/native-ops_v1.3.0_linux_amd64.tar.gz | tar -xz
+          sudo mv native-ops_v1.3.0_linux_amd64 /usr/local/bin/native-ops
+
+      - name: Immutable Update
+        env:
+          TAG: ${{ github.ref_name }}
+          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
+        run: |
+          native-ops instance update \
+            --name my-app \
+            --image "my-app:${TAG}" \
+            --service my-app
+```
+
+**What happens on `git push origin v1.0.0`**:
+1. `native-ops` snapshots the app's persistent storage volume (`my-app-data`).
+2. Replaces the container from the new `my-app:v1.0.0` image.
+3. Re-attaches persistent volumes with `security.shifted=true`.
+4. Probes `/health` before confirming zero-downtime success.
 
 ---
 
 ## License
 
 MIT License. Copyright (c) 2026 theta42.
+
