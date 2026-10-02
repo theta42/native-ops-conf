@@ -1,8 +1,8 @@
 name: Maintenance
 
 # The recurring work, as daemon jobs: this schedule is the schedule. Needs the daemon started with
-# --enable-backup / --enable-dns-sync (fleet.yml daemon.flags) and the object store's keys in its
-# environment, not here.
+# --enable-backup / --enable-dns-sync (fleet.yml daemon.flags), and the credentials pushed to it by the
+# Secrets workflow -- they are on the daemon, not here.
 on:
   schedule:
     - cron: '17 3 * * *'
@@ -13,8 +13,8 @@ env:
   NATIVE_OPS_URL: https://native-ops.example.com
   # Pinned and checksum-verified, so a change to the tool is a reviewed change to this file.
   # The checksum is in the release's checksums.txt.
-  NATIVE_OPS_VERSION: v1.54.1
-  NATIVE_OPS_SHA256: "ad68ead5b9456bb9174b06b671a0ff22c371c283c760ae7221e7d43182017efc"
+  NATIVE_OPS_VERSION: v1.55.0
+  NATIVE_OPS_SHA256: "754524e2d773a2542dcaf7a1e58506d9c6697048a174513639bf2a1c081c797c"
 
 jobs:
   maintenance:

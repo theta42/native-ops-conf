@@ -29,13 +29,13 @@ hosts:
 # native-ops.<domain> to it), and turns on what CI drives. Drop what you do not use.
 #
 # daemon:
-#   version: v1.54.1
-#   sha256: ad68ead5b9456bb9174b06b671a0ff22c371c283c760ae7221e7d43182017efc
+#   version: v1.55.0
+#   sha256: 754524e2d773a2542dcaf7a1e58506d9c6697048a174513639bf2a1c081c797c
 #   flags: "--addr 10.0.100.1:8686 --enable-apply --enable-edge-apply --enable-image-build --enable-backup --enable-dns-sync --enable-auth"
 
 # Off-host backups of the data volumes to any S3-compatible store (`native-ops remote backup`,
-# run nightly by .github/workflows/maintenance.yml). The keys live in the daemon's environment
-# (/etc/native-ops/serve.env: BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET_KEY), never here.
+# run nightly by .github/workflows/maintenance.yml). The keys, and this endpoint and bucket as the
+# pinned destination, are pushed to the daemon by the Secrets workflow, never written here.
 #
 # backup:
 #   endpoint: https://nyc3.digitaloceanspaces.com
