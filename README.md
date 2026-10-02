@@ -93,8 +93,11 @@ from the manifest's `env`.
 1. Run **Release an app** with `app=hello` and `ref=main`. The first time, it fails with
    `recipe_not_approved`: a build runs the recipe's scripts on the host, so an admin approves the
    recipe once on the daemon's **Recipes** page. Builds of other refs from the same recipe need no new
-   approval. Any change to `scripts/` or `images/` is a new recipe.
-2. Plan and apply. `services/hello` now has an image to launch.
+   approval. Any change to `scripts/` or `images/` is a new recipe. On a fresh host the build makes
+   `app-base` first (a few minutes), then the app.
+2. Copy `examples/services/hello` to `services/hello` in a pull request, then plan, approve and
+   apply. (It is not in `services/` from the start because the bootstrap deploys every service, and
+   its image does not exist until it is built.)
 
 An app repository can dispatch **Release an app** on a tag. For per-customer instances, a tenant
 system holds a scoped deployer token (names, images, domains) and calls
@@ -111,8 +114,8 @@ system holds a scoped deployer token (names, images, domains) and calls
 ├── services/                  # static services: one directory, one service.yml each
 │   ├── edge/                  #   Caddy, the only container taking public traffic
 │   ├── gitea/                 #   an upstream OCI image with a data volume and a route
-│   ├── redis/                 #   an OCI image with a volume and no HTTP health check
-│   └── hello/                 #   an app built from images/hello (the native pattern)
+│   └── redis/                 #   an OCI image with a volume and no HTTP health check
+├── examples/services/hello/   # an app built from images/hello (the native pattern), to copy in
 ├── templates/app/             # a blueprint for per-tenant instances (instance launch, previews)
 ├── images/                    # image recipes: base, and one directory per app
 ├── scripts/                   # build-image.sh (run by the daemon for a build) and its helpers
@@ -125,7 +128,7 @@ system holds a scoped deployer token (names, images, domains) and calls
 
 ```yaml
 name: hello                       # the container's name (defaults to the directory)
-image: app-hello:latest           # a local image alias, or an OCI reference (docker.io/...)
+image: app-hello:latest           # a local image alias, or an image from Docker Hub as docker:<name>
 profiles: [base, service]
 volumes:
   - name: hello-data              # an Incus custom volume, created if missing
@@ -159,7 +162,14 @@ An apply replaces a container rather than patching it: it snapshots the volumes,
 image, reattaches the data, writes the environment and waits for the health check before the route
 moves. A plan shows every change first, by key name only.
 
-**Known limit:** an upstream OCI image that reads its configuration from container environment
+**Known limit: the daemon's own credentials.** The daemon reads the DNS provider's token
+(`DO_API_TOKEN`, for `dns_records`) and the object store's keys (for `backup:`) from
+`/etc/native-ops/serve.env` on the host, and today the only way to put them there is to log in once.
+They cannot go through cloud-init, which containers can read back
+([native-ops#47](https://github.com/theta42/native-ops/issues/47)). Until that is solved, leave
+`backup:` and `dns_records:` out, or add the keys to that file once.
+
+**Known limit: OCI environment.** An upstream OCI image that reads its configuration from container environment
 variables (for example `postgres`, which needs `POSTGRES_PASSWORD`) does not see `env:` yet: native-ops
 writes `/etc/default/<name>`, which only a systemd service reads
 ([native-ops#9](https://github.com/theta42/native-ops/issues/9)). Use images like `hello` for such

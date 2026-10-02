@@ -2,7 +2,7 @@
 # profile). native-ops writes a site file per routed service under /etc/caddy/sites/, and
 # edge/Caddyfile holds the rest. Certificates are issued per site by Caddy (HTTP-01).
 name: edge
-image: docker.io/library/caddy:2-alpine
+image: docker:caddy:2-alpine
 profiles:
   - base
   - edge

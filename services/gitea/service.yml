@@ -1,6 +1,6 @@
 # A self-hosted Git server from its upstream OCI image, with its data on a volume and a route.
 name: gitea
-image: docker.io/gitea/gitea:latest-rootless
+image: docker:gitea/gitea:latest-rootless
 profiles:
   - base
   - service
