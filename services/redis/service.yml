@@ -1,7 +1,7 @@
 # A cache from its upstream OCI image, with a data volume. No healthcheck: it does not speak
 # HTTP, and a check here is an HTTP probe.
 name: redis
-image: docker.io/library/redis:7-alpine
+image: docker:redis:7-alpine
 profiles:
   - base
   - service

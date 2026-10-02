@@ -1,7 +1,8 @@
 # An application built from this repo's own recipe (images/hello), the native pattern: a systemd
 # service that reads its configuration from /etc/default/hello, which native-ops writes from `env`.
-# Build the image first (.github/workflows/release.yml with app=hello; the daemon builds it only from
-# a recipe an admin approved), then a plan shows hello to create.
+# It lives here, not in services/, because a bootstrap deploys every service and this image does not
+# exist yet. Build it first (the "Release an app" workflow with app=hello; the daemon builds only from
+# a recipe an admin approved), then copy this directory to services/hello: the next plan creates it.
 name: hello
 image: app-hello:latest
 profiles:
