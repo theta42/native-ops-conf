@@ -1,8 +1,8 @@
 name: Maintenance
 
 # The recurring work, as daemon jobs: this schedule is the schedule. Needs the daemon started with
-# --enable-backup / --enable-dns-sync (fleet.yml daemon.flags) and the object store's keys in its
-# environment, not here.
+# --enable-backup / --enable-dns-sync (fleet.yml daemon.flags), and the credentials pushed to it by the
+# Secrets workflow -- they are on the daemon, not here.
 on:
   schedule:
     - cron: '17 3 * * *'

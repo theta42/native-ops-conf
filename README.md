@@ -43,7 +43,7 @@ required reviewer) and give it three secrets:
 |---|---|
 | `DO_API_TOKEN` | a DigitalOcean API token (read and write) |
 | `SSH_PRIVATE_KEY` | the private key reconcile logs in with; its public half is put on the host |
-| `NATIVE_OPS_BOOTSTRAP_TOKEN` | `nops_` followed by 64 random hex characters (`echo nops_$(openssl rand -hex 32)`): the daemon's first admin |
+| `NATIVE_OPS_BOOTSTRAP_TOKEN` | `nops_` followed by 64 random hex characters (`echo nops_$(openssl rand -hex 32)`): the daemon's first admin (also used by the **Secrets** workflow) |
 
 The bootstrap token is an admin credential. Keep it in that protected environment, where a pull
 request cannot read it, and never in plain repository secrets.
@@ -80,6 +80,25 @@ API) or the OIDC flags. See the daemon docs.
 
 Changes to `edge/` are applied by **Edge** on merge. **Maintenance** runs nightly: backups with
 retention (once `fleet.yml` has a `backup:` section) and DNS records.
+
+### The daemon's own credentials
+
+Backups, DNS records and OIDC sign-in need credentials on the daemon itself. Nobody logs in to put them
+there: enter them in this repository's **`bootstrap` environment** and run the **Secrets** workflow,
+which pushes them to the daemon. The daemon keeps them on the host and reads them when it needs them;
+values are never shown back, and the daemon's Tokens page lists the names.
+
+| In the `bootstrap` environment | Kind | For |
+|---|---|---|
+| `DO_API_TOKEN` | secret | DNS records (`dns_records:`), and DNS on the status page |
+| `BACKUP_S3_ACCESS_KEY`, `BACKUP_S3_SECRET_KEY` | secret | backups (`backup:`) |
+| `NATIVE_OPS_OIDC_CLIENT_SECRET` | secret | OIDC sign-in |
+| `BACKUP_ENDPOINT`, `BACKUP_BUCKET` | variable | the only backup destination the daemon will use: the same as in `fleet.yml` |
+| `DNS_ZONES` | variable | the zones a DNS sync may change, e.g. `example.com` |
+
+The two pins exist because `fleet.yml` comes in with every upload: without them, anyone holding the
+deployer token could send backups elsewhere or change records in any zone the DNS token reaches.
+Re-run **Secrets** whenever a value changes; one removed here is removed from the daemon too.
 
 ---
 
@@ -119,7 +138,7 @@ system holds a scoped deployer token (names, images, domains) and calls
 ├── templates/app/             # a blueprint for per-tenant instances (instance launch, previews)
 ├── images/                    # image recipes: base, and one directory per app
 ├── scripts/                   # build-image.sh (run by the daemon for a build) and its helpers
-└── .github/workflows/         # GitOps, Apply, Edge, Release an app, Maintenance, Bootstrap
+└── .github/workflows/         # GitOps, Apply, Edge, Release an app, Maintenance, Bootstrap, Secrets
 ```
 
 ---
@@ -161,13 +180,6 @@ hooks:                            # optional scripts: a file in the service's di
 An apply replaces a container rather than patching it: it snapshots the volumes, launches the new
 image, reattaches the data, writes the environment and waits for the health check before the route
 moves. A plan shows every change first, by key name only.
-
-**Known limit: the daemon's own credentials.** The daemon reads the DNS provider's token
-(`DO_API_TOKEN`, for `dns_records`) and the object store's keys (for `backup:`) from
-`/etc/native-ops/serve.env` on the host, and today the only way to put them there is to log in once.
-They cannot go through cloud-init, which containers can read back
-([native-ops#47](https://github.com/theta42/native-ops/issues/47)). Until that is solved, leave
-`backup:` and `dns_records:` out, or add the keys to that file once.
 
 **Known limit: OCI environment.** An upstream OCI image that reads its configuration from container environment
 variables (for example `postgres`, which needs `POSTGRES_PASSWORD`) does not see `env:` yet: native-ops

@@ -34,8 +34,8 @@ hosts:
 #   flags: "--addr 10.0.100.1:8686 --enable-apply --enable-edge-apply --enable-image-build --enable-backup --enable-dns-sync --enable-auth"
 
 # Off-host backups of the data volumes to any S3-compatible store (`native-ops remote backup`,
-# run nightly by .github/workflows/maintenance.yml). The keys live in the daemon's environment
-# (/etc/native-ops/serve.env: BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET_KEY), never here.
+# run nightly by .github/workflows/maintenance.yml). The keys, and this endpoint and bucket as the
+# pinned destination, are pushed to the daemon by the Secrets workflow, never written here.
 #
 # backup:
 #   endpoint: https://nyc3.digitaloceanspaces.com
