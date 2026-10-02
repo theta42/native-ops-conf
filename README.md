@@ -100,6 +100,10 @@ The two pins exist because `fleet.yml` comes in with every upload: without them,
 deployer token could send backups elsewhere or change records in any zone the DNS token reaches.
 Re-run **Secrets** whenever a value changes; one removed here is removed from the daemon too.
 
+Give each credential the least it needs, since it is kept on the host: a DigitalOcean token with only
+the domain scopes (`domain:read`, `domain:update`), not a full-access one, and storage keys limited to
+the backup bucket.
+
 ---
 
 ## Building your own apps
