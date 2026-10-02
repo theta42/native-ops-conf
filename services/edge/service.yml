@@ -1,5 +1,8 @@
+# The edge: Caddy, the only container that takes public traffic (80/443 through the `edge`
+# profile). native-ops writes a site file per routed service under /etc/caddy/sites/, and
+# edge/Caddyfile holds the rest. Certificates are issued per site by Caddy (HTTP-01).
 name: edge
-image: caddy:2-alpine
+image: docker.io/library/caddy:2-alpine
 profiles:
   - base
   - edge
@@ -7,8 +10,3 @@ profiles:
 limits:
   limits.cpu: "1"
   limits.memory: "512MB"
-
-healthcheck:
-  path: /
-  port: 80
-  timeout: 20

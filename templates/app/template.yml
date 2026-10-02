@@ -1,23 +1,27 @@
+# A blueprint for per-tenant instances of the hello app, one container per customer, used by
+# `native-ops instance launch` and `native-ops preview launch` on the host. A system that manages
+# tenants through the daemon sends the same shape as JSON to PUT /v1/instances/{name} with a scoped
+# token instead (see docs/daemon.md in native-ops).
 name: app
-image: node:22-alpine
+image: app-hello:latest
+service: hello               # the systemd unit; its environment file is /etc/default/hello
 profiles:
   - base
   - service
 
 volumes:
   - name: "{slug}-data"
-    path: /app/data
+    path: /var/lib/hello
     pool: default
     shifted: true
 
 default_limits:
-  limits.cpu: "2"
-  limits.memory: "2GB"
+  limits.cpu: "1"
+  limits.memory: "512MB"
 
 env_template:
   PORT: "8080"
-  DATA_DIR: "/app/data"
-  TENANT_SLUG: "{slug}"
+  GREETING: "Hello, {slug}"
 
 healthcheck:
   path: /health

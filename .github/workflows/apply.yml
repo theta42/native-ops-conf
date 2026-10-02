@@ -1,12 +1,14 @@
-name: GitOps
+name: Apply
 
-# Every pull request and every push to main: the manifests are validated, and what an apply would
-# change on the host is shown. Nothing here changes the host: the plan token can only plan.
+# Apply a plan an admin approved (on the daemon's Plans page, or POST /v1/plans/<hash>/approve).
+# The daemon plans the tree again and refuses unless it is still exactly that plan, so what was
+# reviewed is what runs; it applies it as a job and this waits for it.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      hash:
+        description: The approved plan's hash (the last line of the plan)
+        required: true
 
 env:
   # The daemon on your host (edge/Caddyfile routes this name to it).
@@ -17,8 +19,7 @@ env:
   NATIVE_OPS_SHA256: "b5440ddcf4a2ee4ab766fbe68363784f3a6fbd5752a8ea85a60ab9a2545520d0"
 
 jobs:
-  plan:
-    name: Validate and plan
+  apply:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,17 +32,7 @@ jobs:
           tar -xzf native-ops.tgz
           install -D -m 0755 "native-ops_${NATIVE_OPS_VERSION}_linux_amd64" "$HOME/.local/bin/native-ops"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Validate
-        run: native-ops validate --config-dir .
-      - name: Plan against the host
+      - name: Apply the approved plan
         env:
-          NATIVE_OPS_TOKEN: ${{ secrets.NATIVE_OPS_PLAN_TOKEN }}   # a planner token
-        run: |
-          set -euo pipefail
-          if [ -z "${NATIVE_OPS_TOKEN}" ]; then
-            echo "::notice::NATIVE_OPS_PLAN_TOKEN is not set yet (run the Bootstrap workflow, then create a planner token on the daemon's Tokens page); skipping the plan"
-            exit 0
-          fi
-          # Exits 1 only when the plan is blocked (an apply would fail). The last line is "plan <hash>":
-          # that is what an admin approves before the Apply workflow can run it.
-          native-ops remote plan --config-dir .
+          NATIVE_OPS_TOKEN: ${{ secrets.NATIVE_OPS_DEPLOY_TOKEN }}   # a deployer token
+        run: native-ops remote apply --config-dir . --expect "${{ inputs.hash }}"

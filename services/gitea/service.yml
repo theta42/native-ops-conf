@@ -1,3 +1,4 @@
+# A self-hosted Git server from its upstream OCI image, with its data on a volume and a route.
 name: gitea
 image: docker.io/gitea/gitea:latest-rootless
 profiles:
@@ -8,16 +9,16 @@ volumes:
   - name: gitea-data
     path: /var/lib/gitea
     pool: default
-    shifted: true
+    shifted: true            # security.shifted=true: the container's uids map onto the volume
 
 limits:
   limits.cpu: "2"
   limits.memory: "2GB"
 
-healthcheck:
+healthcheck:                 # an HTTP check: apply waits for it before routing traffic
   path: /
   port: 3000
-  timeout: 30
+  timeout: 60
 
 routing:
   domain: git.example.com

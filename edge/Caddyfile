@@ -1,0 +1,17 @@
+# The edge's Caddyfile: global options, hand-written sites, and the import that serves the
+# routes native-ops publishes for services and instances (sites/*.caddy). A change here reaches
+# the host through .github/workflows/edge.yml (POST /v1/edge/apply): validated, reloaded, and
+# rolled back if Caddy rejects it. Keep the import line, or published routes are never served.
+{
+    email admin@example.com
+    log {
+        output file /var/log/caddy.log
+    }
+}
+
+# The native-ops daemon, which CI talks to. It listens on the Incus bridge (see fleet.yml daemon.flags).
+native-ops.example.com {
+    reverse_proxy 10.0.100.1:8686
+}
+
+import /etc/caddy/sites/*.caddy

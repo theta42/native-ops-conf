@@ -1,8 +1,8 @@
-# Fleet Configuration for native-ops
-# Rename this cluster and set your base domain
-name: production-fleet
-domain: example.com
-dns_provider: digitalocean # "digitalocean", "proxmox", or custom plugin in providers/dns/
+# Fleet configuration for native-ops (https://github.com/theta42/native-ops).
+# Rename the fleet and set your base domain; everything below it is read by `native-ops`.
+name: my-fleet
+domain: example.com          # reconcile points @ and * of this zone at the host
+dns_provider: digitalocean   # the built-in provider (needs DO_API_TOKEN)
 
 network:
   bridge_name: incusbr0
@@ -11,18 +11,45 @@ network:
 providers:
   digitalocean:
     region: nyc1
-    default_size: s-4vcpu-8gb
+    default_size: s-4vcpu-8gb   # the size reconcile creates a host with
 
-  proxmox:
-    endpoint: "https://pve.example.com:8006"
-    node: "pve-01"
-    default_pool: "local-zfs"
-
-# Host inventory. If a host is set to "auto" (or missing on the provider),
-# native-ops will automatically provision it with cloud-init on git push!
+# The hosts. `address: auto` means reconcile looks the host up by name at the provider and
+# creates it if it does not exist (it never destroys or rebuilds one). A host you already run:
+# `provider: static` and its IP in `address`.
 hosts:
   node-01:
     provider: digitalocean
-    size: s-4vcpu-8gb
-    region: nyc1
-    address: "auto"
+    address: auto
+
+# The native-ops daemon a new host installs from cloud-init. CI talks to it; nobody logs in.
+# Pin a release and its checksum (from the release's checksums.txt): a change to the daemon is a
+# reviewed change to this file. Uncomment once you have picked the release.
+#
+# The flags: the daemon listens on the Incus bridge, where the edge reaches it (edge/Caddyfile routes
+# native-ops.<domain> to it), and turns on what CI drives. Drop what you do not use.
+#
+# daemon:
+#   version: v1.54.0
+#   sha256: b5440ddcf4a2ee4ab766fbe68363784f3a6fbd5752a8ea85a60ab9a2545520d0
+#   flags: "--addr 10.0.100.1:8686 --enable-apply --enable-edge-apply --enable-image-build --enable-backup --enable-dns-sync --enable-auth"
+
+# Off-host backups of the data volumes to any S3-compatible store (`native-ops remote backup`,
+# run nightly by .github/workflows/maintenance.yml). The keys live in the daemon's environment
+# (/etc/native-ops/serve.env: BACKUP_S3_ACCESS_KEY, BACKUP_S3_SECRET_KEY), never here.
+#
+# backup:
+#   endpoint: https://nyc3.digitaloceanspaces.com
+#   region: nyc3
+#   bucket: my-fleet-backups
+#   prefix: incus/
+#   retain_daily: 7
+#   retain_monthly: 6
+
+# Records kept in sync by `native-ops remote dns-sync` beyond the apex and wildcard A (create or
+# update only; it never deletes). Each names its zone.
+#
+# dns_records:
+#   - zone: example.com
+#     type: TXT
+#     name: "@"
+#     value: "v=spf1 -all"
