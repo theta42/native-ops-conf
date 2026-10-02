@@ -1,162 +1,180 @@
-# native-ops-conf (Starter Template)
+# native-ops-conf (starter template)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-This is the official **starter template** for managing your fleet with **[`theta42/native-ops`](https://github.com/theta42/native-ops)**.
+The starter configuration repository for **[theta42/native-ops](https://github.com/theta42/native-ops)**.
+Fork it, describe your fleet, and operate it from git.
 
-It provides a complete, declarative GitOps configuration for provisioning cloud hosts (DigitalOcean, Proxmox VE), managing Incus/LXC container workloads, persistent storage volumes, and dynamic Caddy edge reverse proxy routing with wildcard TLS.
+**How it works.** This repository is the source of truth. CI is the only control path: nobody runs a
+control app on their own machine, and after the first bootstrap nobody logs in to a host. Each host
+runs the **native-ops daemon**, and CI talks to it over HTTPS with API tokens:
+
+- every pull request is validated and **planned** against the host;
+- an admin **approves** the exact plan, in the daemon's web UI;
+- the **Apply** workflow runs that plan, and only that plan, as a job with a record.
+
+The daemon holds the host's credentials. CI holds only scoped tokens.
 
 ---
 
-## 🚀 Quickstart for New Organizations
+## Quickstart
 
-### 1. Fork or Migrate this Repository
-- **On GitHub**: Click **[Use this template](https://github.com/theta42/native-ops-conf/generate)** or **Fork** to create a private `native-ops-conf` repository in your organization.
-- **On Gitea / GitLab / Self-Hosted**: Use **Migrate Repository** pointing to `https://github.com/theta42/native-ops-conf.git`.
+### 1. Fork
 
-### 2. Configure Your Git Secret (1 Secret Only!)
-In your repository or organization settings (**Settings → Secrets and Variables → Actions**), add:
+- **GitHub:** **Use this template** (or fork) to make a private repository in your organization.
+- **Gitea / self-hosted:** **New Migration** from `https://github.com/theta42/native-ops-conf.git`.
+  Gitea Actions runs the workflows in `.github/workflows`.
 
-| Secret Name | Description | Example |
+### 2. Describe your fleet
+
+- `fleet.yml`: your fleet's name, domain and host, and uncomment `daemon:`, pinning a native-ops
+  release and its SHA-256 from the release's `checksums.txt`.
+- `edge/Caddyfile`: your email for Let's Encrypt, and `native-ops.<your domain>`.
+- `services/*/service.yml`: the `routing.domain` of each service.
+- In every workflow under `.github/workflows`, set `NATIVE_OPS_URL`, `NATIVE_OPS_VERSION` and
+  `NATIVE_OPS_SHA256` at the top.
+
+### 3. Bootstrap (once)
+
+Create an environment named **`bootstrap`** (Settings → Environments; on GitHub, add yourself as a
+required reviewer) and give it three secrets:
+
+| Secret | What |
+|---|---|
+| `DO_API_TOKEN` | a DigitalOcean API token (read and write) |
+| `SSH_PRIVATE_KEY` | the private key reconcile logs in with; its public half is put on the host |
+| `NATIVE_OPS_BOOTSTRAP_TOKEN` | `nops_` followed by 64 random hex characters (`echo nops_$(openssl rand -hex 32)`): the daemon's first admin |
+
+The bootstrap token is an admin credential. Keep it in that protected environment, where a pull
+request cannot read it, and never in plain repository secrets.
+
+Run the **Bootstrap** workflow (Actions → Bootstrap → Run). It:
+
+1. creates the host (a droplet) with cloud-init that installs Incus and the native-ops daemon (the
+   host gets only the bootstrap token's SHA-256);
+2. points `@` and `*` of your domain at it;
+3. prepares Incus, then deploys the services and `edge/Caddyfile` directly over SSH. This is the only
+   time anything is deployed that way. Afterwards the daemon answers at `https://native-ops.<domain>`.
+
+### 4. Give CI its tokens
+
+Open `https://native-ops.<domain>`, paste the bootstrap token, and go to **Tokens**:
+
+| Create | Store it as the repository secret | Used by |
 |---|---|---|
-| **`DO_API_TOKEN`** | DigitalOcean API Token (Read & Write permissions) | `dop_v1_...` |
+| a `planner` token | `NATIVE_OPS_PLAN_TOKEN` | GitOps (plans every pull request; can do nothing else) |
+| a `deployer` token | `NATIVE_OPS_DEPLOY_TOKEN` | Apply, Edge, Release an app, Maintenance |
 
-*(Note: If no SSH key is provided, `native-ops` will automatically generate a secure in-memory Ed25519 keypair and inject it into your Droplet on first boot).*
+A deployer token can apply only a plan an admin approved, so a stolen one can at most re-run an
+approved plan, once, within the hour.
 
-### 3. Customize `fleet.yml`
-Edit `fleet.yml` to define your domain, cloud provider, and host:
+For people, turn on sign-in instead of sharing tokens: `--enable-auth` (local users, managed over the
+API) or the OIDC flags. See the daemon docs.
 
-```yaml
-name: my-company-fleet
-domain: mydomain.com
-dns_provider: digitalocean
+### 5. Everyday flow
 
-providers:
-  digitalocean:
-    region: nyc1
-    default_size: s-4vcpu-8gb
+1. Change a manifest in a pull request. **GitOps** prints the plan; its last line is `plan <hash>`.
+2. Merge, then an admin approves that plan on the daemon's **Plans** page.
+3. Run **Apply** with the hash. The daemon refuses if the host or the tree changed since the plan, so
+   what was reviewed is what runs.
 
-hosts:
-  node-01:
-    provider: digitalocean
-    size: s-4vcpu-8gb
-    region: nyc1
-    address: "auto" # automatically creates droplet & resolves IP
-```
-
-### 4. Open a Pull Request & Merge
-1. Create a branch and open a Pull Request with your changes.
-2. The automated PR check runs `native-ops validate` to check the plan.
-3. Merge the PR to `main` — the runner automatically:
-   - Provisions your Droplet in DigitalOcean with cloud-init (Incus + UFW).
-   - Points `@.mydomain.com` and `*.mydomain.com` DNS records to the new host.
-   - Deploys Caddy edge proxy with automatic Let's Encrypt Wildcard TLS certificates.
-   - Deploys your declarative services (`services/`).
+Changes to `edge/` are applied by **Edge** on merge. **Maintenance** runs nightly: backups with
+retention (once `fleet.yml` has a `backup:` section) and DNS records.
 
 ---
 
-## 📁 Repository Structure
+## Building your own apps
+
+`images/<app>/build.sh` is an image recipe. `scripts/build-image.sh` runs it on the host in a
+throwaway container and publishes `app-<app>:<ref>` and `app-<app>:latest`. The example app `hello`
+is a small HTTP service run by systemd, configured from `/etc/default/hello`, which native-ops writes
+from the manifest's `env`.
+
+1. Run **Release an app** with `app=hello` and `ref=main`. The first time, it fails with
+   `recipe_not_approved`: a build runs the recipe's scripts on the host, so an admin approves the
+   recipe once on the daemon's **Recipes** page. Builds of other refs from the same recipe need no new
+   approval. Any change to `scripts/` or `images/` is a new recipe.
+2. Plan and apply. `services/hello` now has an image to launch.
+
+An app repository can dispatch **Release an app** on a tag. For per-customer instances, a tenant
+system holds a scoped deployer token (names, images, domains) and calls
+`PUT /v1/instances/<name>` and `POST /v1/instances/<name>/update` on the daemon.
+
+---
+
+## Repository layout
 
 ```
 .
-├── fleet.yml                      # Global fleet, DNS, and host definitions
-├── services/                      # Static / persistent cluster services
-│   ├── edge/service.yml           # Caddy reverse proxy (ports 80/443)
-│   ├── postgres/service.yml       # PostgreSQL 16 with persistent volume
-│   ├── redis/service.yml          # Redis 7 cache
-│   └── gitea/service.yml          # Self-hosted Git server
-├── templates/                     # Blueprints for dynamic tenant instances (SaaS)
-│   └── app/template.yml           # App container blueprint
-├── providers/
-│   └── dns/
-│       └── digitalocean.py        # Python DNS plugin
-└── .github/workflows/
-    └── gitops.yml                 # Automated validation on PR and deployment on merge
+├── fleet.yml                  # fleet, DNS, hosts, the daemon release, backups, DNS records
+├── edge/Caddyfile             # the edge's global options and hand-written sites (the daemon's route)
+├── services/                  # static services: one directory, one service.yml each
+│   ├── edge/                  #   Caddy, the only container taking public traffic
+│   ├── gitea/                 #   an upstream OCI image with a data volume and a route
+│   ├── redis/                 #   an OCI image with a volume and no HTTP health check
+│   └── hello/                 #   an app built from images/hello (the native pattern)
+├── templates/app/             # a blueprint for per-tenant instances (instance launch, previews)
+├── images/                    # image recipes: base, and one directory per app
+├── scripts/                   # build-image.sh (run by the daemon for a build) and its helpers
+└── .github/workflows/         # GitOps, Apply, Edge, Release an app, Maintenance, Bootstrap
 ```
 
 ---
 
-## ⚙️ Service Manifest Reference (`service.yml`)
+## `service.yml` reference
 
 ```yaml
-name: postgres
-image: docker.io/library/postgres:16-alpine # OCI image or local alias
-profiles:
-  - base
-  - service
-
+name: hello                       # the container's name (defaults to the directory)
+image: app-hello:latest           # a local image alias, or an OCI reference (docker.io/...)
+profiles: [base, service]
 volumes:
-  - name: postgres-data           # Incus storage volume
-    path: /var/lib/postgresql/data # Mount path inside container
+  - name: hello-data              # an Incus custom volume, created if missing
+    path: /var/lib/hello          # where it is mounted
     pool: default
-    shifted: true                 # security.shifted=true for unprivileged uid mapping
-
+    shifted: true                 # security.shifted=true: the container's uids map onto it
+    owner: hello                  # optional: hand the mount point to this user in the container
 limits:
-  limits.cpu: "2"                 # cgroup CPU core limit
-  limits.memory: "2GB"            # cgroup memory limit
-
-env:
-  POSTGRES_USER: "app_user"
-  POSTGRES_DB: "app_db"
-
-healthcheck:
-  path: /
-  port: 5432
+  limits.cpu: "1"
+  limits.memory: "256MB"
+env:                              # written to /etc/default/<name> (values never appear in a plan)
+  PORT: "8080"
+env_file: services/hello/hello.env   # optional, relative to the repository root; env wins over it
+healthcheck:                      # an HTTP probe; apply waits for it (omit for non-HTTP services)
+  path: /health
+  port: 8080
   timeout: 30
-
-routing:                          # Optional Caddy reverse proxy route
-  domain: db.mydomain.com
-  upstream_port: 5432
+routing:                          # publish https://<domain> through the edge
+  domain: hello.example.com
+  upstream_port: 8080
+forwards:                         # raw host ports for protocols the edge cannot carry
+  - listen: 2222                  #   on the host
+    target: 22                    #   in the container
+hooks:                            # optional scripts: a file in the service's directory, or inline
+  pre_deploy: pre.sh              #   on the host, before launch
+  container_init: init.sh         #   inside the new container, before its service starts
+  post_deploy: post.sh            #   on the host, after it is healthy
 ```
+
+An apply replaces a container rather than patching it: it snapshots the volumes, launches the new
+image, reattaches the data, writes the environment and waits for the health check before the route
+moves. A plan shows every change first, by key name only.
+
+**Known limit:** an upstream OCI image that reads its configuration from container environment
+variables (for example `postgres`, which needs `POSTGRES_PASSWORD`) does not see `env:` yet: native-ops
+writes `/etc/default/<name>`, which only a systemd service reads
+([native-ops#9](https://github.com/theta42/native-ops/issues/9)). Use images like `hello` for such
+apps, or images that work without environment.
 
 ---
 
-## 🚢 Application CI/CD Deployments
+## More
 
-Application repositories (like web apps, APIs, or internal tools) can deploy new versions to this fleet automatically when a git release tag is pushed.
-
-### Tag-Based Release Pattern in App Repositories
-
-In your application's repository (e.g. `my-app`), add `.github/workflows/release.yml`:
-
-```yaml
-name: Deploy Release
-
-on:
-  push:
-    tags: [ 'v*' ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install native-ops
-        run: |
-          curl -fsSL https://github.com/theta42/native-ops/releases/download/v1.3.0/native-ops_v1.3.0_linux_amd64.tar.gz | tar -xz
-          sudo mv native-ops_v1.3.0_linux_amd64 /usr/local/bin/native-ops
-
-      - name: Immutable Update
-        env:
-          TAG: ${{ github.ref_name }}
-          DO_API_TOKEN: ${{ secrets.DO_API_TOKEN }}
-        run: |
-          native-ops instance update \
-            --name my-app \
-            --image "my-app:${TAG}" \
-            --service my-app
-```
-
-**What happens on `git push origin v1.0.0`**:
-1. `native-ops` snapshots the app's persistent storage volume (`my-app-data`).
-2. Replaces the container from the new `my-app:v1.0.0` image.
-3. Re-attaches persistent volumes with `security.shifted=true`.
-4. Probes `/health` before confirming zero-downtime success.
-
----
+- [native-ops README](https://github.com/theta42/native-ops#readme): the engine and its commands.
+- [docs/daemon.md](https://github.com/theta42/native-ops/blob/main/docs/daemon.md): the daemon's API,
+  roles, approvals, tokens, sign-in and maintenance jobs.
+- [docs/git-organization.md](https://github.com/theta42/native-ops/blob/main/docs/git-organization.md):
+  branch and tag protection, secret scoping, and the staging → production lanes.
 
 ## License
 
 MIT License. Copyright (c) 2026 theta42.
-

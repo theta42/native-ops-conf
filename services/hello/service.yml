@@ -1,0 +1,26 @@
+# An application built from this repo's own recipe (images/hello), the native pattern: a systemd
+# service that reads its configuration from /etc/default/hello, which native-ops writes from `env`.
+# Build the image first (.github/workflows/release.yml with app=hello; the daemon builds it only from
+# a recipe an admin approved), then a plan shows hello to create.
+name: hello
+image: app-hello:latest
+profiles:
+  - base
+  - service
+
+limits:
+  limits.cpu: "1"
+  limits.memory: "256MB"
+
+env:
+  GREETING: "Hello from native-ops"
+  PORT: "8080"
+
+healthcheck:
+  path: /health
+  port: 8080
+  timeout: 30
+
+routing:
+  domain: hello.example.com
+  upstream_port: 8080
