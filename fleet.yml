@@ -30,7 +30,7 @@ hosts:
 #
 # daemon:
 #   version: v1.54.0
-#   sha256: <sha256 of native-ops_v1.54.0_linux_amd64.tar.gz>
+#   sha256: b5440ddcf4a2ee4ab766fbe68363784f3a6fbd5752a8ea85a60ab9a2545520d0
 #   flags: "--addr 10.0.100.1:8686 --enable-apply --enable-edge-apply --enable-image-build --enable-backup --enable-dns-sync --enable-auth"
 
 # Off-host backups of the data volumes to any S3-compatible store (`native-ops remote backup`,
