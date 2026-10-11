@@ -32,8 +32,8 @@ hosts:
 # deploy tags add --git-url https://github.com (or your Gitea) --deploy-repo <owner>/<this repo>.
 #
 # daemon:
-#   version: v1.72.0
-#   sha256: 4866753fe79d0cac88e493e2f24a6aa0d92820fa29788adcce9f5a3f3acebcfd
+#   version: v1.72.1
+#   sha256: 5aa7f370bf393711405895cf79e1b76aa843148d5bf4868e8b3889aaa4003d8d
 #   flags: "--addr 10.0.100.1:8686 --enable-apply --enable-image-build --enable-backup --enable-auth"
 
 # Off-host backups of the data volumes to any S3-compatible store (`native-ops remote backup`,
