@@ -1,6 +1,6 @@
 name: Deploy
 
-# Gitea: pushing a protected deploy tag deploys that commit.
+# Pushing a protected deploy tag deploys that commit.
 #
 #   git tag deploy-2026.10.11 && git push origin deploy-2026.10.11
 #
@@ -9,9 +9,10 @@ name: Deploy
 # job; this waits for it. If another change is running, the deploy waits its turn. A commit whose
 # fleet.yml pins another daemon release upgrades the daemon first and continues on it.
 #
-# Needs: the deploy-* tags protected (Settings -> Tags), the daemon started with --enable-apply
-# --git-url <your Gitea> --deploy-repo <owner/this repo> (fleet.yml daemon.flags), and NATIVE_OPS_GIT_TOKEN
-# synced to it (Secrets). The daemon reads tags from Gitea's API: on GitHub use GitOps + Apply instead.
+# Needs: the deploy-* tags protected (Gitea: Settings -> Tags; GitHub: a tag ruleset, Active, restricting
+# creations and updates), the daemon started with --enable-apply --git-url <https://github.com or your
+# Gitea> --deploy-repo <owner/this repo> (fleet.yml daemon.flags), and NATIVE_OPS_GIT_TOKEN synced to it
+# (Secrets).
 on:
   push:
     tags: ['deploy-*']

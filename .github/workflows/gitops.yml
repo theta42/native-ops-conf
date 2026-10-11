@@ -2,7 +2,7 @@ name: GitOps
 
 # Every pull request and every push to main: the manifests are validated, and what an apply would
 # change on the host is shown. Nothing here changes the host: a plan of an uploaded tree applies only
-# with an admin's approval (Apply), and a deploy only from a protected tag (Deploy, on Gitea).
+# with an admin's approval (Apply), and a deploy only from a protected tag (Deploy).
 on:
   pull_request:
     branches: [main]

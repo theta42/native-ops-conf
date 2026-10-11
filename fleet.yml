@@ -28,8 +28,8 @@ hosts:
 # The flags: the daemon listens on the Incus bridge, where the edge reaches it (edge/Caddyfile routes
 # native-ops.<domain> to it), and turns on what CI drives. Drop what you do not use.
 #
-# Once the daemon runs, a deploy tag (Gitea) whose commit pins another release upgrades the daemon to it.
-# On Gitea, add --git-url https://git.example.com --deploy-repo <owner>/<this repo> for deploy tags.
+# Once the daemon runs, a deploy tag whose commit pins another release upgrades the daemon to it. For
+# deploy tags add --git-url https://github.com (or your Gitea) --deploy-repo <owner>/<this repo>.
 #
 # daemon:
 #   version: __NATIVE_OPS_VERSION__
