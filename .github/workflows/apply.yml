@@ -15,8 +15,8 @@ env:
   NATIVE_OPS_URL: https://native-ops.example.com
   # Pinned and checksum-verified, so a change to the tool is a reviewed change to this file.
   # The checksum is in the release's checksums.txt.
-  NATIVE_OPS_VERSION: v1.71.0
-  NATIVE_OPS_SHA256: "3cc16b18bf53564216a91e0006de6d7dc41e61d3429f5dc7fefe30227d694fff"
+  NATIVE_OPS_VERSION: v1.72.0
+  NATIVE_OPS_SHA256: "4866753fe79d0cac88e493e2f24a6aa0d92820fa29788adcce9f5a3f3acebcfd"
 
 jobs:
   apply:
