@@ -1,0 +1,44 @@
+name: Deploy
+
+# Gitea: pushing a protected deploy tag deploys that commit.
+#
+#   git tag deploy-2026.10.11 && git push origin deploy-2026.10.11
+#
+# The daemon resolves the tag on the git server, checks that a tag protection rule covers it, reads the
+# commit itself (nothing from the runner is applied), plans it, refuses a blocked plan and applies it as a
+# job; this waits for it. If another change is running, the deploy waits its turn. A commit whose
+# fleet.yml pins another daemon release upgrades the daemon first and continues on it.
+#
+# Needs: the deploy-* tags protected (Settings -> Tags), the daemon started with --enable-apply
+# --git-url <your Gitea> --deploy-repo <owner/this repo> (fleet.yml daemon.flags), and NATIVE_OPS_GIT_TOKEN
+# synced to it (Secrets). The daemon reads tags from Gitea's API: on GitHub use GitOps + Apply instead.
+on:
+  push:
+    tags: ['deploy-*']
+
+env:
+  # The daemon on your host (edge/Caddyfile routes this name to it).
+  NATIVE_OPS_URL: https://native-ops.example.com
+  # Pinned and checksum-verified, so a change to the tool is a reviewed change to this file.
+  # The checksum is in the release's checksums.txt.
+  NATIVE_OPS_VERSION: __NATIVE_OPS_VERSION__
+  NATIVE_OPS_SHA256: "__NATIVE_OPS_SHA256__"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install native-ops (pinned, checksum verified)
+        run: |
+          set -euo pipefail
+          cd "$(mktemp -d)"
+          curl -fsSL --proto '=https' --tlsv1.2 -o native-ops.tgz \
+            "https://github.com/theta42/native-ops/releases/download/${NATIVE_OPS_VERSION}/native-ops_${NATIVE_OPS_VERSION}_linux_amd64.tar.gz"
+          echo "${NATIVE_OPS_SHA256}  native-ops.tgz" | sha256sum -c -
+          tar -xzf native-ops.tgz
+          install -D -m 0755 "native-ops_${NATIVE_OPS_VERSION}_linux_amd64" "$HOME/.local/bin/native-ops"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Deploy the tag
+        env:
+          NATIVE_OPS_TOKEN: ${{ secrets.NATIVE_OPS_TOKEN }}   # the one deployer token
+        run: native-ops remote deploy --tag "${GITHUB_REF_NAME}" --timeout 60m
