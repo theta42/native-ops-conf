@@ -10,10 +10,13 @@ control app on their own machine, and after the first bootstrap nobody logs in t
 runs the **native-ops daemon**, and CI talks to it over HTTPS with API tokens:
 
 - every pull request is validated and **planned** against the host;
-- an admin **approves** the exact plan, in the daemon's web UI;
-- the **Apply** workflow runs that plan, and only that plan, as a job with a record.
+- pushing a protected **deploy tag** deploys that commit: the daemon reads it from GitHub or Gitea
+  itself, so the tag push is the approval;
+- for anything else, an admin **approves** an exact plan in the daemon's web UI and the **Apply**
+  workflow runs that plan, and only that plan.
 
-The daemon holds the host's credentials. CI holds only scoped tokens.
+Every change is a job with a record, and the host runs one at a time: a change asked for while another
+runs waits its turn. The daemon holds the host's credentials. CI holds **one** native-ops token.
 
 ---
 
@@ -56,30 +59,46 @@ Run the **Bootstrap** workflow (Actions → Bootstrap → Run). It:
 3. prepares Incus, then deploys the services and `edge/Caddyfile` directly over SSH. This is the only
    time anything is deployed that way. Afterwards the daemon answers at `https://native-ops.<domain>`.
 
-### 4. Give CI its tokens
+### 4. Give CI its token
 
-Open `https://native-ops.<domain>`, paste the bootstrap token, and go to **Tokens**:
+Open `https://native-ops.<domain>`, paste the bootstrap token, and go to **Tokens**. Create **one**
+`deployer` token and store it as the repository secret **`NATIVE_OPS_TOKEN`**. Every workflow but
+Bootstrap and Secrets uses it: GitOps, Deploy, Apply, Release an app, Maintenance.
 
-| Create | Store it as the repository secret | Used by |
-|---|---|---|
-| a `planner` token | `NATIVE_OPS_PLAN_TOKEN` | GitOps (plans every pull request; can do nothing else) |
-| a `deployer` token | `NATIVE_OPS_DEPLOY_TOKEN` | Apply, Edge, Release an app, Maintenance |
-
-A deployer token can apply only a plan an admin approved, so a stolen one can at most re-run an
-approved plan, once, within the hour.
+One token is enough, and more would not be safer: a git server hands a repository's secrets to any
+workflow run in it, so tokens split per workflow are all readable by whoever can push a workflow. What
+limits the token is the daemon: it deploys only a commit a protected tag points at, applies an uploaded
+tree only with a plan an admin approved, builds only an approved recipe, and sets only service secrets
+(`SERVICE_*`), never the daemon's own credentials.
 
 For people, turn on sign-in instead of sharing tokens: `--enable-auth` (local users, managed over the
 API) or the OIDC flags. See the daemon docs.
 
 ### 5. Everyday flow
 
-1. Change a manifest in a pull request. **GitOps** prints the plan; its last line is `plan <hash>`.
-2. Merge, then an admin approves that plan on the daemon's **Plans** page.
-3. Run **Apply** with the hash. The daemon refuses if the host or the tree changed since the plan, so
-   what was reviewed is what runs.
+Set up deploy tags once:
 
-Changes to `edge/` are applied by **Edge** on merge. **Maintenance** runs nightly: backups with
-retention (once `fleet.yml` has a `backup:` section) and DNS records.
+1. Protect the `deploy-*` tags. **GitHub:** Settings → Rules → Rulesets → New tag ruleset: enforcement
+   **Active**, target `refs/tags/deploy-*`, **Restrict creations** and **Restrict updates**, and the people
+   who may deploy in the bypass list. **Gitea:** Settings → Tags, protect `deploy-*` for those people.
+2. Add `--git-url https://github.com --deploy-repo <owner>/<this repo>` (or your Gitea's URL) to the
+   daemon's flags in `fleet.yml`.
+3. Make a token that can read this repository and its tag protection (GitHub: a fine-grained token with
+   Contents and Metadata read; Gitea: a repository admin's read token), put it in the `bootstrap`
+   environment as `NATIVE_OPS_GIT_TOKEN`, and run **Secrets**.
+
+Then every change is:
+
+1. A pull request. **GitOps** prints the plan.
+2. Merge, and push a tag: `git tag deploy-2026.10.11 && git push origin deploy-2026.10.11`. **Deploy**
+   deploys that commit, waiting its turn if the host is busy, and prints the job's log.
+
+**Apply** remains for a change without a tag: an admin approves the plan's hash on the daemon's **Plans**
+page, and Apply runs exactly that plan, refusing if the host or the tree changed since.
+
+`edge/Caddyfile`, `fleet.yml`'s `dns_records` and each service's `forwards:` are part of the plan: they
+change with the same deploy as the services. **Maintenance** runs nightly: backups with retention (once
+`fleet.yml` has a `backup:` section) and image pruning.
 
 ### The daemon's own credentials
 
@@ -93,12 +112,18 @@ values are never shown back, and the daemon's Tokens page lists the names.
 | `DO_API_TOKEN` | secret | DNS records (`dns_records:`), and DNS on the status page |
 | `BACKUP_S3_ACCESS_KEY`, `BACKUP_S3_SECRET_KEY` | secret | backups (`backup:`) |
 | `NATIVE_OPS_OIDC_CLIENT_SECRET` | secret | OIDC sign-in |
+| `NATIVE_OPS_GIT_TOKEN` | secret | deploy tags: a token that can read this repository and its tag protection |
 | `BACKUP_ENDPOINT`, `BACKUP_BUCKET` | variable | the only backup destination the daemon will use: the same as in `fleet.yml` |
 | `DNS_ZONES` | variable | the zones a DNS sync may change, e.g. `example.com` |
 
 The two pins exist because `fleet.yml` comes in with every upload: without them, anyone holding the
 deployer token could send backups elsewhere or change records in any zone the DNS token reaches.
-Re-run **Secrets** whenever a value changes; one removed here is removed from the daemon too.
+Re-run **Secrets** whenever a value changes. An empty value is not sent; remove a credential from the
+daemon on its Tokens page.
+
+A service's own secrets (`env_from` in its `service.yml`, names starting `SERVICE_`) are synced with the
+deployer token instead: `native-ops remote secret-sync SERVICE_...` in a workflow that maps them from the
+repository's secrets (see the daemon docs, "Service secrets").
 
 Give each credential the least it needs, since it is kept on the host: a DigitalOcean token with only
 the domain scopes (`domain:read`, `domain:update`), not a full-access one, and storage keys limited to
@@ -115,11 +140,12 @@ from the manifest's `env`.
 
 1. Run **Release an app** with `app=hello` and `ref=main`. The first time, it fails with
    `recipe_not_approved`: a build runs the recipe's scripts on the host, so an admin approves the
-   recipe once on the daemon's **Recipes** page. Builds of other refs from the same recipe need no new
+   recipe once on the daemon's **Recipes** page (a deploy tag at a commit with the recipe approves it
+   too). Builds of other refs from the same recipe need no new
    approval. Any change to `scripts/` or `images/` is a new recipe. On a fresh host the build makes
    `app-base` first (a few minutes), then the app.
-2. Copy `examples/services/hello` to `services/hello` in a pull request, then plan, approve and
-   apply. (It is not in `services/` from the start because the bootstrap deploys every service, and
+2. Copy `examples/services/hello` to `services/hello` in a pull request, then deploy it (a deploy
+   tag, or plan, approve and apply). (It is not in `services/` from the start because the bootstrap deploys every service, and
    its image does not exist until it is built.)
 
 An app repository can dispatch **Release an app** on a tag. For per-customer instances, a tenant
@@ -142,7 +168,7 @@ system holds a scoped deployer token (names, images, domains) and calls
 ├── templates/app/             # a blueprint for per-tenant instances (instance launch, previews)
 ├── images/                    # image recipes: base, and one directory per app
 ├── scripts/                   # build-image.sh (run by the daemon for a build) and its helpers
-└── .github/workflows/         # GitOps, Apply, Edge, Release an app, Maintenance, Bootstrap, Secrets
+└── .github/workflows/         # GitOps, Deploy, Apply, Release an app, Maintenance, Bootstrap, Secrets
 ```
 
 ---
